@@ -1,0 +1,49 @@
+###################### Bathroom Automations ##############################
+
+- alias: Bathroom Fan Off
+  trigger:
+  - platform: state
+    entity_id: switch.kasa_toggle_switch_1
+    to: 'on'
+    for: "00:20:00"
+  - platform: state
+    entity_id: light.kasa_dimmer_switch_1
+    to: 'off'
+    for: "00:15:00"
+  condition:
+  - condition: state
+    entity_id: light.kasa_dimmer_switch_1
+    state: 'off'
+    for: "00:15:00"
+  - condition: state
+    entity_id: switch.kasa_toggle_switch_1
+    state: 'on'
+    for: "00:20:00"
+  action:
+  - service: switch.turn_off
+    entity_id: switch.kasa_toggle_switch_1
+
+- alias: Bathroom Lights On
+  trigger:
+  - platform: state
+    entity_id: switch.kasa_toggle_switch_1
+    to: "on"
+  condition:
+  - condition: state
+    entity_id: light.kasa_dimmer_switch_1
+    state: 'off'
+    for: "00:00:10"
+  action:
+  - service: light.turn_on
+    entity_id: light.kasa_dimmer_switch_1
+    
+- alias: Update Bathroom Fan Status
+  trigger:
+  - platform: time_pattern
+    seconds: "/3"
+  action:
+  - service: homeassistant.update_entity
+    entity_id:
+      - switch.kasa_toggle_switch_1
+      - light.kasa_dimmer_switch_1
+  

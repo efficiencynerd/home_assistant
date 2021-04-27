@@ -1,0 +1,129 @@
+###################### CGM Alerts #########################################################################
+
+- alias: Emily going low ############################################################################
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.emily_cgm_sgv
+      below: 4.0
+  action:
+  - service: automation.trigger
+    data:
+      entity_id: automation.emily_low_broadcast
+
+
+- alias: Emily dropping fast ############################################################################
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.emily_cgm_sgv
+      below: 6.0
+    - platform: numeric_state
+      entity_id: sensor.emily_cgm_trend
+      above: 5 # straight down or worse
+  condition:
+    - condition: time
+      before: '21:00:00'
+      after: '08:00:00'
+    - condition: numeric_state
+      entity_id: sensor.emily_cgm_sgv
+      below: 6.0
+    - condition: numeric_state
+      entity_id: sensor.emily_cgm_trend
+      above: 5 # straight down or worse
+    - condition: state
+      entity_id: group.everybody
+      state: "home"
+  action:
+  - service: automation.trigger
+    data:
+      entity_id: automation.emily_low_broadcast
+
+- alias: Emily dropping gradually ############################################################################
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.emily_cgm_sgv
+      below: 4.9
+    - platform: numeric_state
+      entity_id: sensor.emily_cgm_trend
+      above: 4 # anything below flat
+  condition:
+    - condition: time
+      before: '21:00:00'
+      after: '08:00:00'
+    - condition: numeric_state
+      entity_id: sensor.emily_cgm_sgv
+      below: 4.9
+    - condition: numeric_state
+      entity_id: sensor.emily_cgm_trend
+      above: 4 # anything below flat
+    - condition: state
+      entity_id: group.everybody
+      state: "home"
+  action:
+  - service: automation.trigger
+    data:
+      entity_id: automation.emily_low_broadcast
+
+
+- alias: Emily low broadcast ############################################################################
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.emily_cgm_sgv
+      below: 3.5
+  action:
+  - service: notify.michael_phone
+    data:
+        data:
+          clickAction: "https://emily-goodyear.herokuapp.com/"
+          channel: Alarm
+          importance: max
+          vibrationPattern: "100, 2000, 200, 2000, 200, 2000"
+        message: >
+          Emily's blood sugar is {{ states('sensor.emily_cgm_sgv') | round(1) }}
+          and has changed by {{ state_attr('sensor.emily_bg_change', 'change') }} in the last 10 minutes
+        title: "Emily's BG is Low"
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: media_player.living_room_tv_2
+            state: "on"
+        sequence:
+          - service: notify.living_room_tv
+            data:
+                message: >
+                  Emily's blood sugar is {{ states('sensor.emily_cgm_sgv') | round(1) }}
+                  and has changed by {{ state_attr('sensor.emily_bg_change', 'change') }} in the last 10 minutes
+                title: "Emily's BG is Low"
+    default:
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: input_boolean.away_mode
+            state: "off"
+        sequence:
+          - choose: 
+              - conditions:
+                  - condition: and
+                    conditions:
+                      - condition: time
+                        after: '21:00:00'
+                        before: '08:00:00'
+                      - condition: state
+                        entity_id:
+                            - light.kitchen
+                            - light.couch
+                        state: "off"
+                sequence:
+                  - service: light.turn_on
+                    data:
+                      entity_id: light.bedroom
+                      brightness: 50
+                      rgb_color: [255,0,0] # red
+            # All other times, just broadcast
+            default:
+                  - service: rest_command.assistant_broadcast
+                    data_template:
+                      command: >
+                          Emily's blood sugar is {{ states('sensor.emily_cgm_sgv') | round(1) }}
+                          and has changed by {{ state_attr('sensor.emily_bg_change', 'change') }} in the last 10 minutes
+          - delay:
+              minutes: 20

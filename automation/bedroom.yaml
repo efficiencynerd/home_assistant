@@ -1,0 +1,246 @@
+######################### Bedroom Switch Automation #################################################
+- alias: Bedroom 1 Button 1 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: bedroom_switch
+      event: 1002
+  action:
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: light.bedroom_lights
+          state: "on"
+        sequence:
+        - service: light.turn_off
+          entity_id: light.bedroom_lights
+      default:
+        - service: light.turn_on
+          entity_id: light.bedroom_lights
+          data:
+            brightness: 255
+
+- alias: Bedroom 1 Button 1 Hold
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: bedroom_switch
+      event: 1001
+  action:
+        - choose:
+          - conditions:
+            - condition: state
+              entity_id: input_boolean.guest_mode
+              state: "on"
+            sequence:
+            - service: light.turn_off
+              entity_id:
+              - light.living_room
+              - light.kitchen
+              - light.office
+          default:
+          - service: light.turn_off
+            entity_id:
+            - light.living_room
+            - light.kitchen
+            - light.office
+            - light.bathroom_lights
+        - service: media_player.turn_off
+          entity_id: media_player.living_room_tv_2
+        - delay:
+            seconds: 30
+        - service: light.turn_off
+          entity_id: light.bedroom_lights
+
+- alias: Bedroom 1 Button 2 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: bedroom_switch
+      event: 2002
+  action:
+        - service: light.turn_on
+          entity_id: light.bedroom_lights
+          data:
+            brightness: 75
+  mode: single
+
+- alias: Bedroom 1 Button 3 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: bedroom_switch
+      event: 3002
+  action:
+   - service: light.turn_on
+     entity_id: light.bedroom_lights
+     data:
+       brightness: 1
+  mode: single
+
+- alias: Bedroom 1 Button 4 Press
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: bedroom_switch
+      event: 4000
+  action:
+  - service: media_player.media_stop
+    entity_id: media_player.bedroom_speaker
+
+- alias: Bedroom 1 Button 4 Hold
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: bedroom_switch
+      event: 4001
+  action:
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.bedroom_speaker
+      volume_level: 0.00
+  - delay: 
+      seconds: 2
+  - service: media_player.play_media
+    data:
+      entity_id: media_player.bedroom_speaker
+      media_content_id: media-source://media_source/media/brown_noise.mp3
+      media_content_type: audio/mp3
+  - delay: 
+      seconds: 4
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.bedroom_speaker
+      volume_level: 0.40
+  mode: single
+
+
+####################### Night Night! ######################################################################
+- alias: Night Night
+  trigger:
+    - platform: state
+      entity_id: input_boolean.good_night
+      to: "on"
+  action:
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.bedroom_speaker
+      volume_level: 0.20
+  - service: counter.reset
+    entity_id: counter.song_counter
+  - repeat:
+      sequence:
+        - choose:
+            # if stopped for 8 seconds, restart spotify
+            - conditions:
+                - condition: state
+                  entity_id: media_player.bedroom_speaker
+                  state:
+                    - idle
+                    - paused
+                    - "off"
+                    - "unavailable"
+                  for:
+                    seconds: 8
+              sequence:
+                - service: media_player.volume_set
+                  data:
+                    entity_id: media_player.bedroom_speaker
+                    volume_level: 0.00
+                - service: script.turn_on
+                  entity_id: script.bedtime_music
+                - delay:
+                    seconds: 2
+                - service: media_player.volume_set
+                  data:
+                      entity_id: media_player.bedroom_speaker
+                      volume_level: 0.20
+                - delay:
+                    seconds: 120
+          # not paused for 10 seconds yet, just chill out and wait for next song to start
+          default:
+            - delay:
+                seconds: 10
+        - wait_template: "{{ not is_state('media_player.bedroom_speaker', 'playing') }}"
+        - delay:
+            seconds: 10
+        - service: counter.increment
+          entity_id: counter.song_counter
+      until:
+        - condition: or
+          conditions:
+          - condition: and
+            conditions:
+              - condition: time
+                after: '23:00:00'
+                before: '03:00:00'
+              - condition: state
+                entity_id: input_boolean.good_night
+                state: "on"
+                for:
+                  hours: 1
+            # This is effectively a song counter, quit if more than 80 songs have been played
+          - condition: template
+            value_template: "{{ repeat.index > 80 }}"
+            # Die if good night gets turned off
+          - condition: state
+            entity_id: input_boolean.good_night
+            state: "off"
+  - wait_template: "{{ not is_state('media_player.bedroom_speaker', 'playing') }}"
+  - service: media_player.media_pause
+    data:
+      entity_id: media_player.bedroom_speaker
+  - service: input_boolean.turn_off
+    data:
+      entity_id: input_boolean.good_night
+  - choose: 
+      - conditions:
+        # Check again in case we bailed for other reasons
+        - condition: time
+          after: '23:00:00'
+          before: '03:00:00'
+        sequence:
+          - service: automation.trigger
+            data:
+              entity_id: automation.brown_noise
+    default:
+
+
+######################################## Brown Noise #########################################
+- alias: Brown Noise
+  trigger:
+  - platform: state
+    entity_id: input_boolean.brown_noise
+    to: "on"
+  action:
+  - service: input_boolean.turn_off
+    data:
+      entity_id: input_boolean.brown_noise
+  - service: media_player.media_pause
+    data:
+      entity_id: media_player.bedroom_speaker
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.bedroom_speaker
+      volume_level: 0.00
+  - delay: 
+      seconds: 2
+  - service: media_player.play_media
+    data:
+      entity_id: media_player.bedroom_speaker
+      media_content_id: media-source://media_source/media/brown_noise.mp3
+      media_content_type: audio/mp3
+  - delay: 
+      seconds: 4
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.bedroom_speaker
+      volume_level: 0.40
+
+

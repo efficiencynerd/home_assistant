@@ -1,0 +1,9 @@
+bedtime_music:
+  alias: Bedtime Music
+  sequence:
+    - service: spotcast.start
+      data:
+        entity_id: media_player.bedroom_speaker
+        uri: spotify:playlist:2blhp7G1gdg2v7oBf2YRVE
+        shuffle: true
+        random_song: true

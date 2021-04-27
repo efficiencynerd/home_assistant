@@ -1,0 +1,14 @@
+- id: babyMonitorNoiseTrigger
+  alias: Baby Is Making Noise
+  trigger:
+    platform: state
+    entity_id: binary_sensor.ffmpeg_noise
+    from: "off"
+    to: "on"
+  action:
+    - service: notify.michael_phone
+      data:
+        title: "Baby is Making Noise!!"
+        message: >
+          Baby started making noise at {{ now().strftime("%r") }}
+

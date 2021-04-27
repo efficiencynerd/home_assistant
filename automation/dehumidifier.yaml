@@ -1,0 +1,141 @@
+# # ########### Dehumidifier Control #####################
+
+
+- alias: Turn Dehumidifier On
+  trigger:
+  - platform: state
+    entity_id: media_player.living_room_tv_2
+    to: 'off'
+  - platform: state
+    entity_id: light.living_room
+    to: 'off'
+  - platform: state
+    entity_id: binary_sensor.humidity_above_max
+    to: 'on'
+  - platform: time
+    at: "19:00:00"
+  condition:
+  - condition: state
+    entity_id: binary_sensor.humidity_above_max
+    state: 'on'
+  - condition: state
+    entity_id: media_player.living_room_tv_2
+    state: 'off'
+  - condition: state
+    entity_id: light.living_room
+    state: 'off'
+  - condition: or
+    conditions:
+    - condition: time
+      after: "19:00:00"
+      before: "7:00:00"
+    - condition: state
+      entity_id: 'binary_sensor.workday_sensor'
+      state: 'off'
+  action:
+  - service: switch.turn_on
+    entity_id: switch.smart_plug_1
+###################################### Turn Off ###########################
+- alias: Turn Dehumidifier Off
+  trigger:
+  - platform: state
+    entity_id: media_player.living_room_tv_2
+    to: 'on'
+  - platform: state
+    entity_id: light.living_room
+    to: 'on'
+  - platform: state
+    entity_id: 'binary_sensor.humidity_below_min'
+    to: 'on'
+  - platform: time
+    at: "07:00:00"
+  condition:
+  - condition: or
+    conditions:
+    - condition: state
+      entity_id: 'binary_sensor.humidity_below_min'
+      state: 'on'
+    - condition: state
+      entity_id: media_player.living_room_tv_2
+      state: 'on'
+    - condition: numeric_state
+      entity_id: light.living_room
+      value_template: >
+        {% if states.light.living_room.state == "on"  %}
+          {{ states.light.living_room.attributes.brightness }}
+        {% else %}
+          11
+        {% endif %}
+      above: 26
+    - condition: and
+      conditions:
+      - condition: time
+        after: "07:00:00"
+        before: "19:00:00"
+      - condition: state
+        entity_id: 'binary_sensor.workday_sensor'
+        state: 'on'
+  action:
+  - service: switch.turn_off
+    entity_id: switch.smart_plug_1
+  
+
+############################## Send Dehumidifier Notification ############################
+- alias: Dehumidifier turned off
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.power_living_room_14_1min
+      below: 60
+  condition:
+    - condition: state
+      entity_id: switch.smart_plug_1
+      state: 'on'
+  action:
+    - service: switch.turn_off
+      entity_id: switch.smart_plug_1
+    - delay:
+        seconds: 30
+    - service: notify.michael_phone
+      data:
+        title: "Dehumidifier is Full"
+        message: >
+            Dehumidifier stopped running, and has run for {{ states('sensor.hours_dehumidifier_run_since_empty') }} hours.
+        data:
+          actions:
+          - action: "dehumidifier"
+            title: "Reset Hours"
+    
+- alias: Dehumidifier is Full
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.hours_dehumidifier_run_since_empty
+      above: 15
+  action:
+    - service: notify.michael_phone
+      data:
+        title: "Dehumidifier is Getting Full"
+        message: >
+            Dehumidifier has run for {{ states('sensor.hours_dehumidifier_run_since_empty') }} hours.
+        data:
+          actions:
+          - action: "dehumidifier"
+            title: "Reset Hours"
+       
+            
+################################ Reset Dehumidifier Hours from Notification ########################
+- alias: Reset Dehumidifier Hours
+  trigger:
+      platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: dehumidifier
+  action:
+    - service: python_script.set_state
+      data_template:
+        entity_id: sensor.hours_dehumidifier_run_since_empty
+        state: 0
+
+
+
+
+

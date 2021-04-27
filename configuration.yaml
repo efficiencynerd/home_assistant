@@ -1,0 +1,969 @@
+
+# Configure a default setup of Home Assistant (frontend, api, etc)
+default_config:
+
+python_script:
+
+google:
+  client_id: !secret google_client_id
+  client_secret: !secret google_client_secret
+  
+# Uncomment this if you are using SSL/TLS, running in Docker container, etc.
+http:
+#   ssl_certificate: /ssl/fullchain.pem
+#   ssl_key: /ssl/privkey.pem
+  ip_ban_enabled: True
+  login_attempts_threshold: 10
+  
+homeassistant:
+  customize: !include customize.yaml
+  media_dirs:
+    media: /media
+
+spotify:
+  client_id: !secret spotify_client_id
+  client_secret: !secret spotify_client_secret
+  
+# Text to speech
+tts:
+  - platform: google_translate
+
+frontend:
+  themes: !include_dir_merge_named themes
+
+################ Notification groups ############################################
+notify:
+  - name: michael_phone
+    platform: group
+    services:
+      - service: mobile_app_pixel_4a
+  - name: emily_phone
+    platform: group
+    services:
+      - service: mobile_app_moto_g_power
+
+
+group: !include groups.yaml
+automation: !include_dir_merge_list automation
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+################ Database
+recorder:
+  db_url: !secret maria_db_url
+  purge_keep_days: 7
+  commit_interval: 30
+  exclude:
+    entities:
+      - sensor.upstairs_wattage
+      - sensor.downstairs_wattage
+
+history:
+
+# influxdb:
+#   host: a0d7b954-influxdb
+#   port: 8086
+#   database: home_assistant
+#   username: homeassistant
+#   password: admin
+#   max_retries: 3
+#   default_measurement: state
+#   include:
+#     entities:
+#       - sensor.mysa_current_temp
+#       - sensor.living_room_sensor_temperature
+#       - sensor.kitchen_sensor_temperature
+#       - sensor.openweathermap_temperature
+#       - sensor.mysa_humidity
+#       - sensor.openweathermap_humidity
+#   component_config_glob:
+#     sensor.*humidity:
+#       override_measurement: humidity
+#     sensor.*temperature:
+#       override_measurement: temperature
+
+############ LG TV  
+wake_on_lan:
+
+webostv:
+  host: 192.168.86.78
+  name: Living Room TV
+
+spotcast:
+  sp_dc: !secret spotcast_sp_dc
+  sp_key: !secret spotcast_sp_key
+######################################## Custom Sensors ////////////////////////////////////////////
+sensor:
+    # System Stats #####################################################
+  - platform: uptime
+  
+  - platform: systemmonitor
+    resources:
+    - type: memory_use_percent
+    - type: memory_use
+    - type: last_boot
+    - type: processor_use
+    - type: processor_temperature
+    - type: disk_use_percent
+    - type: disk_use
+
+############### CPU Temperature #####################################
+  - platform: command_line
+    name: NUC CPU Temperature
+    command: "cat /sys/devices/virtual/thermal/thermal_zone2/temp"
+    value_template: '{{ value | multiply(0.001) | round(3) }}'
+    unit_of_measurement: '°C'
+    
+    #### History Statistics #########################################
+  - platform: history_stats
+    name: TV on this week
+    entity_id: media_player.living_room_tv_2
+    state: 'on'
+    type: time
+    duration:
+      days: 7
+    end: '{{ now() }}'
+
+  - platform: integration
+    source: sensor.dehumidifier_on
+    name: Hours Dehumidifier Run Since Empty
+    method: left
+    
+  - platform: template
+    sensors:
+      dehumidifier_on:
+        friendly_name: "Dehumidifier Is On"
+        value_template: "{{ is_state('switch.smart_plug_1', 'on') | abs }}"
+      mysa_set_point:
+        friendly_name: "Mysa Set Point"
+        unit_of_measurement: 'C'
+        value_template: "{{ state_attr('climate.mysa_cc8800', 'temperature')|float }}"
+
+      mysa_current_temp:
+        friendly_name: "Mysa Current Temp"
+        unit_of_measurement: 'C'
+        value_template: "{{ state_attr('climate.mysa_cc8800', 'current_temperature')|float }}"
+
+      mysa_humidity:
+        friendly_name: "Mysa Humidity"
+        unit_of_measurement: '%'
+        value_template: "{{ state_attr('climate.mysa_cc8800', 'current_humidity')|float }}"
+
+      max_indoor_humidity:
+        friendly_name: "Max Indoor Humidity"
+        unit_of_measurement: '%'
+        value_template: >
+            {% set outdoor_temp = states('sensor.openweathermap_temperature')|float %}
+
+            {% set upper_dew = (states('sensor.mysa_current_temp') | 
+            float * 3 + outdoor_temp*2)/5 %}
+
+            {% set upper_hum = 100 * ( e**(17.625*243.04*(upper_dew-states('sensor.mysa_current_temp')
+            | float) / ((243.04+states('sensor.mysa_current_temp') | float)*(243.04+upper_dew)))) %}
+
+            {% if upper_hum > 58 %}
+              58
+            {% elif upper_hum < 40 %}
+              40
+            {% else %}
+              {{ upper_hum }}
+            {% endif %}
+
+      min_indoor_humidity:
+        friendly_name: "Min Indoor Humidity"
+        unit_of_measurement: '%'
+        value_template: >
+            {% set outdoor_temp = states('sensor.openweathermap_temperature')|float %}
+
+            {% set lower_dew = (states('sensor.mysa_current_temp') | 
+            float + outdoor_temp)/2 %}
+
+            {% set lower_hum = 100 * ( e**(17.625*243.04*(lower_dew-states('sensor.mysa_current_temp')
+            | float) / ((243.04+states('sensor.mysa_current_temp') | float)*(243.04+lower_dew)))) %}
+
+            {% if lower_hum > 49 %}
+              49
+            {% elif lower_hum < 35 %}
+              35
+            {% else %}
+              {{ lower_hum }}
+            {% endif %}
+
+####### Emily CGM Data #################################################
+  - platform: rest
+    name: emily_cgm
+    resource: !secret emily_cgm_website
+    value_template: >
+      sgv:{{value_json[0].sgv/18 | round(3)}},
+      trend:{{value_json[0].trend}},
+      direction:{{value_json[0].direction}},
+      time:{{ ( (as_timestamp(now()) - as_timestamp(value_json[0].dateString) ) / 60) | round(0) }}
+
+  - platform: template
+    sensors:
+      emily_cgm_sgv:
+        value_template: >
+          {{ states('sensor.emily_cgm') | regex_findall_index("sgv:(\d+\.\d+)") }}
+        unit_of_measurement: "mmol/L"
+      emily_cgm_trend:
+        value_template: >
+          {{ states('sensor.emily_cgm') | regex_findall_index("trend:(\d+)") }}
+      emily_cgm_direction:
+        value_template: >
+          {{ states('sensor.emily_cgm') | regex_findall_index("direction:(\w+)") }}
+      emily_cgm_time:
+        value_template: >
+          {{ states('sensor.emily_cgm') | regex_findall_index("time:(\d+)") }}
+          
+  - platform: statistics
+    entity_id: sensor.emily_cgm_sgv
+    name: emily_bg_change
+    sampling_size: 3
+    max_age:
+      minutes: 30
+
+  - platform: steam_online
+    api_key: !secret steam_api_key
+    accounts:
+      - 76561198040018713
+      - 76561198041634505
+
+    ######################### Power Meters ##################################
+  - platform: integration
+    source: sensor.power_bechardian_123_1min
+    name: Whole House Kwh
+    round: 3
+    unit_prefix: k
+    unit: 'kWh'
+    method: left
+  - platform: integration
+    source: sensor.upstairs_1min_total
+    name: Upstairs Kwh
+    round: 3
+    unit_prefix: k
+    unit: 'kWh'
+    method: left
+  - platform: integration
+    source: sensor.downstairs_1min_total
+    name: Downstairs Kwh
+    round: 3
+    unit_prefix: k
+    unit: 'kWh'
+    method: left
+  - platform: integration
+    source: sensor.down_heat_1min_total
+    name: Down Heat Kwh
+    round: 3
+    unit_prefix: k
+    unit: 'kWh'
+    method: left
+  - platform: integration
+    source: sensor.power_living_room_heat_13_1min
+    name: Our Heat Kwh
+    round: 3
+    unit_prefix: k
+    unit: 'kWh'
+    method: left
+    
+  - platform: template
+    sensors:
+    
+    ######################################### Live 1 Second Readings ##################################################################
+    
+      upstairs_wattage:
+        value_template: "{{ (states('sensor.power_upstairs_2_15_1s')|float + states('sensor.power_upstairs_1_16_1s')|float) | round(0) }}"
+        unit_of_measurement: W
+      downstairs_wattage:
+        value_template: "{{ (states('sensor.power_bechardian_123_1s')|float - states('sensor.upstairs_wattage')|float) | round(0) }}"
+        unit_of_measurement: W
+
+    ########################################### 1 Minute Readings ###################################################################
+    
+      upstairs_1min_total:
+        unit_of_measurement: W
+        value_template: "{{ states('sensor.power_upstairs_2_15_1min')|float + states('sensor.power_upstairs_1_16_1min')|float }}"
+      downstairs_1min_total:
+        unit_of_measurement: W
+        value_template: >
+                       {{ states('sensor.power_bechardian_123_1min')|float - states('sensor.power_upstairs_2_15_1min')|float -
+                          states('sensor.power_upstairs_1_16_1min')|float - states('sensor.power_living_room_heat_13_1min')|float }}
+      down_heat_1min_total:
+        unit_of_measurement: W
+        value_template: >
+                       {{ states('sensor.power_bechardian_123_1min')|float - states('sensor.power_upstairs_2_15_1min')|float -
+                          states('sensor.power_upstairs_1_16_1min')|float }}
+      balance_1min_wattage:
+        unit_of_measurement: W
+        value_template: >
+                       {% if (states('sensor.power_bechardian_123_1min')|float - states('sensor.power_upstairs_2_15_1min')|float -
+                              states('sensor.power_upstairs_1_16_1min')|float - states('sensor.power_living_room_14_1min')|float - 
+                              states('sensor.power_dryer_1_12_1min')|float - states('sensor.power_dryer_2_11_1min')|float -
+                              states('sensor.power_stove_1_10_1min')|float - states('sensor.power_stove_2_9_1min')|float - 
+                              states('sensor.power_living_room_heat_13_1min')|float) < 0 %}
+                          0
+                       {% else %}
+                          {{ states('sensor.power_bechardian_123_1min')|float - states('sensor.power_upstairs_2_15_1min')|float -
+                             states('sensor.power_upstairs_1_16_1min')|float - states('sensor.power_living_room_14_1min')|float - 
+                             states('sensor.power_dryer_1_12_1min')|float - states('sensor.power_dryer_2_11_1min')|float -
+                             states('sensor.power_stove_1_10_1min')|float - states('sensor.power_stove_2_9_1min')|float - 
+                             states('sensor.power_living_room_heat_13_1min')|float }}
+                       {% endif %}
+                              
+                              
+                              
+    ############################################ Monthly Readings ################################################################
+
+      upstairs_mon_kwh:
+        unit_of_measurement: kWh
+        value_template: >
+          {% if (states('sensor.power_upstairs_2_15_1mon')|float + states('sensor.power_upstairs_1_16_1mon')|float) == 0 %}
+            {{ states('sensor.upstairs_mon_kwh') }}
+          {% else %}
+            {{ (states('sensor.power_upstairs_2_15_1mon')|float + states('sensor.power_upstairs_1_16_1mon')|float) | round(3) }}
+          {% endif %}
+
+        # availability_template: "{{ states('sensor.power_upstairs_2_15_1mon') not in ['unknown', 'unavailable'] }}"
+
+      downstairs_mon_kwh:
+        unit_of_measurement: kWh
+        value_template: >
+            {% if (states('sensor.power_bechardian_123_1mon')|float - states('sensor.power_upstairs_2_15_1mon')|float -
+                   states('sensor.power_upstairs_1_16_1mon')|float - states('sensor.power_living_room_heat_13_1mon')|float) == 0 %}
+              {{ states('sensor.downstairs_mon_kwh') }}
+            {% else %}
+              {{ (states('sensor.power_bechardian_123_1mon')|float - states('sensor.power_upstairs_2_15_1mon')|float -
+                  states('sensor.power_upstairs_1_16_1mon')|float - states('sensor.power_living_room_heat_13_1mon')|float) | round(3) }}
+            {% endif %}
+
+        # availability_template: "{{ states('sensor.power_upstairs_2_15_1mon') not in ['unknown', 'unavailable'] }}"
+
+      down_heat_mon_kwh:
+        unit_of_measurement: kWh
+        value_template: >
+            {% if (states('sensor.power_bechardian_123_1mon')|float - states('sensor.power_upstairs_2_15_1mon')|float -
+                          states('sensor.power_upstairs_1_16_1mon')|float) == 0 %}
+              {{ states('sensor.down_heat_mon_kwh') }}
+            {% else %}
+              {{ (states('sensor.power_bechardian_123_1mon')|float - states('sensor.power_upstairs_2_15_1mon')|float -
+                          states('sensor.power_upstairs_1_16_1mon')|float) | round(3) }}
+            {% endif %}
+
+      whole_house_mon_kwh: # Template this so that the utility meter catches up when it goes unavailable
+        unit_of_measurement: kWh
+        value_template: >
+          {% if (states('sensor.power_bechardian_123_1mon')|float) == 0 %}
+            {{ states('sensor.whole_house_mon_kwh') }}
+          {% else %}
+            {{ (states('sensor.power_bechardian_123_1mon')|float) | round(3) }}
+          {% endif %}
+
+      our_heat_mon_kwh: # Template this so that the utility meter catches up when it goes unavailable
+        unit_of_measurement: kWh
+        value_template: >
+          {% if (states('sensor.power_living_room_heat_13_1mon')|float) == 0 %}
+            {{ states('sensor.our_heat_mon_kwh') }}
+          {% else %}
+            {{ (states('sensor.power_living_room_heat_13_1mon')|float) | round(3) }}
+          {% endif %}
+
+    ############################################### Daily/Monthly/Yearly Totals ################################################################
+    
+      whole_house_daily_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.whole_house_daily_offpeak')|float + states('sensor.whole_house_daily_onpeak')|float + 
+          states('sensor.whole_house_daily_midpeak')|float) | round(3) }}
+      whole_house_monthly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.whole_house_monthly_offpeak')|float + states('sensor.whole_house_monthly_onpeak')|float + 
+          states('sensor.whole_house_monthly_midpeak')|float) | round(3) }}
+      whole_house_last_month_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (state_attr('sensor.whole_house_monthly_offpeak', 'last_period')|float + state_attr('sensor.whole_house_monthly_onpeak', 'last_period')|float +
+          state_attr('sensor.whole_house_monthly_midpeak', 'last_period')|float) | round(3) }}
+      whole_house_yearly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.whole_house_yearly_offpeak')|float + states('sensor.whole_house_yearly_onpeak')|float + 
+          states('sensor.whole_house_yearly_midpeak')|float) | round(3) }}
+
+      upstairs_daily_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.upstairs_daily_offpeak')|float + states('sensor.upstairs_daily_onpeak')|float + 
+          states('sensor.upstairs_daily_midpeak')|float) | round(3) }}
+      upstairs_monthly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.upstairs_monthly_offpeak')|float + states('sensor.upstairs_monthly_onpeak')|float + 
+          states('sensor.upstairs_monthly_midpeak')|float) | round(3) }}
+      upstairs_last_month_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (state_attr('sensor.upstairs_monthly_offpeak', 'last_period')|float + state_attr('sensor.upstairs_monthly_onpeak', 'last_period')|float +
+          state_attr('sensor.upstairs_monthly_midpeak', 'last_period')|float) | round(3) }}
+      upstairs_yearly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.upstairs_yearly_offpeak')|float + states('sensor.upstairs_yearly_onpeak')|float + 
+          states('sensor.upstairs_yearly_midpeak')|float) | round(3) }}
+
+      downstairs_daily_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.downstairs_daily_offpeak')|float + states('sensor.downstairs_daily_onpeak')|float + 
+          states('sensor.downstairs_daily_midpeak')|float) | round(3) }}
+      downstairs_monthly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.downstairs_monthly_offpeak')|float + states('sensor.downstairs_monthly_onpeak')|float + 
+          states('sensor.downstairs_monthly_midpeak')|float) | round(3) }}
+      downstairs_yearly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.downstairs_yearly_offpeak')|float + states('sensor.downstairs_yearly_onpeak')|float + 
+          states('sensor.downstairs_yearly_midpeak')|float) | round(3) }}
+
+      our_heat_daily_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.our_heat_daily_offpeak')|float + states('sensor.our_heat_daily_onpeak')|float + 
+          states('sensor.our_heat_daily_midpeak')|float) | round(3) }}
+      our_heat_monthly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.our_heat_monthly_offpeak')|float + states('sensor.our_heat_monthly_onpeak')|float + 
+          states('sensor.our_heat_monthly_midpeak')|float) | round(3) }}
+      our_heat_yearly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.our_heat_yearly_offpeak')|float + states('sensor.our_heat_yearly_onpeak')|float + 
+          states('sensor.our_heat_yearly_midpeak')|float) | round(3) }}
+
+      down_heat_daily_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.down_heat_daily_offpeak')|float + states('sensor.down_heat_daily_onpeak')|float + 
+          states('sensor.down_heat_daily_midpeak')|float) | round(3) }}
+      down_heat_monthly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.down_heat_monthly_offpeak')|float + states('sensor.down_heat_monthly_onpeak')|float + 
+          states('sensor.down_heat_monthly_midpeak')|float) | round(3) }}
+      down_heat_last_month_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (state_attr('sensor.down_heat_monthly_offpeak', 'last_period')|float + state_attr('sensor.down_heat_monthly_onpeak', 'last_period')|float +
+          state_attr('sensor.down_heat_monthly_midpeak', 'last_period')|float) | round(3) }}
+      down_heat_yearly_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.down_heat_yearly_offpeak')|float + states('sensor.down_heat_yearly_onpeak')|float + 
+          states('sensor.down_heat_yearly_midpeak')|float) | round(3) }}
+
+      ##################################################### Today's costs ###############################################################
+      
+      upstairs_day_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.upstairs_daily_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      upstairs_day_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.upstairs_daily_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      upstairs_day_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.upstairs_daily_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      upstairs_day_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ ((states('sensor.upstairs_daily_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) +
+                           (states('sensor.upstairs_daily_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) +
+                           (states('sensor.upstairs_daily_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0)) | round(4) }}
+      upstairs_day_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.upstairs_day_total_cost')|float / states('sensor.upstairs_daily_total')|float * 100) | round(2)}}
+        
+      downstairs_day_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.down_heat_daily_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      downstairs_day_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.down_heat_daily_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      downstairs_day_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.down_heat_daily_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      downstairs_day_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ ((states('sensor.down_heat_daily_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) + 
+                           (states('sensor.down_heat_daily_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) +
+                           (states('sensor.down_heat_daily_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0)) | round(4)}}
+      downstairs_day_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.downstairs_day_total_cost')|float / states('sensor.down_heat_daily_total')|float * 100) | round(2)}}
+
+      whole_house_day_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_daily_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      whole_house_day_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_daily_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      whole_house_day_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_daily_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      whole_house_day_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ ((states('sensor.whole_house_daily_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) +
+                           (states('sensor.whole_house_daily_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) +
+                           (states('sensor.whole_house_daily_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0)) | round(4)}}
+      whole_house_day_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.whole_house_day_total_cost')|float / states('sensor.whole_house_daily_total')|float * 100) | round(2)}}
+
+      ##################################################### This month's costs ###############################################################
+      
+      upstairs_mon_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.upstairs_monthly_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      upstairs_mon_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.upstairs_monthly_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      upstairs_mon_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.upstairs_monthly_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      upstairs_mon_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ (states('sensor.upstairs_mon_offpeak_cost')|float + states('sensor.upstairs_mon_midpeak_cost')|float +
+                          states('sensor.upstairs_mon_onpeak_cost')|float) | round(2)}}
+      upstairs_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.upstairs_mon_total_cost')|float / states('sensor.upstairs_monthly_total')|float * 100) | round(2)}}
+        
+      downstairs_mon_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.down_heat_monthly_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      downstairs_mon_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.down_heat_monthly_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      downstairs_mon_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.down_heat_monthly_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      downstairs_mon_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ (states('sensor.downstairs_mon_offpeak_cost')|float + states('sensor.downstairs_mon_midpeak_cost')|float +
+                          states('sensor.downstairs_mon_onpeak_cost')|float) | round(2)}}
+      downstairs_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.downstairs_mon_total_cost')|float / states('sensor.down_heat_monthly_total')|float * 100) | round(2)}}
+
+      whole_house_mon_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_monthly_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      whole_house_mon_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_monthly_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      whole_house_mon_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_monthly_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(2) }}"
+      whole_house_mon_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ (states('sensor.whole_house_mon_offpeak_cost')|float + states('sensor.whole_house_mon_midpeak_cost')|float +
+                          states('sensor.whole_house_mon_onpeak_cost')|float) | round(2)}}
+      whole_house_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.whole_house_mon_total_cost')|float / states('sensor.whole_house_monthly_total')|float * 100) | round(2)}}
+
+      whole_house_mon_tier_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {% if states('sensor.whole_house_monthly_total')|float > states('input_number.tier_2_kwh')|float %}
+                          {{ (states('input_number.tier_2_kwh')|float * states('input_number.tier_1_kwh_cost')|float / 100.0 +
+                             (states('sensor.whole_house_monthly_total')|float - states('input_number.tier_2_kwh')|float) * 
+                             states('input_number.tier_2_kwh_cost')|float / 100.0) | round(2)}}
+                       {% else %}
+                          {{ (states('sensor.whole_house_monthly_total')|float * states('input_number.tier_1_kwh_cost')|float / 100.0) | round(2)}}
+                       {% endif %}
+
+      ################################################# Last Month's costs ############################################################
+      
+      upstairs_last_mon_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.upstairs_monthly_offpeak', 'last_period')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(2) }}
+      upstairs_last_mon_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.upstairs_monthly_midpeak', 'last_period')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(2) }}
+      upstairs_last_mon_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.upstairs_monthly_onpeak', 'last_period')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(2) }}
+      upstairs_last_mon_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ (states('sensor.upstairs_last_mon_offpeak_cost')|float + states('sensor.upstairs_last_mon_midpeak_cost')|float +
+                          states('sensor.upstairs_last_mon_onpeak_cost')|float) | round(2)}}
+      upstairs_last_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.upstairs_last_mon_total_cost')|float / states('sensor.upstairs_last_month_total')|float * 100) | round(2)}}
+        
+      downstairs_last_mon_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.down_heat_monthly_offpeak', 'last_period')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(2) }}
+      downstairs_last_mon_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.down_heat_monthly_midpeak', 'last_period')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(2) }}
+      downstairs_last_mon_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.down_heat_monthly_onpeak', 'last_period')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(2) }}
+      downstairs_last_mon_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ (states('sensor.downstairs_last_mon_offpeak_cost')|float + states('sensor.downstairs_last_mon_midpeak_cost')|float +
+                          states('sensor.downstairs_last_mon_onpeak_cost')|float) | round(2)}}
+      downstairs_last_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.downstairs_last_mon_total_cost')|float / states('sensor.down_heat_last_month_total')|float * 100) | round(2)}}
+
+      whole_house_last_mon_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.whole_house_monthly_offpeak', 'last_period')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(2) }}
+      whole_house_last_mon_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.whole_house_monthly_midpeak', 'last_period')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(2) }}
+      whole_house_last_mon_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: >
+          {{ (state_attr('sensor.whole_house_monthly_onpeak', 'last_period')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(2) }}
+      whole_house_last_mon_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ (states('sensor.whole_house_last_mon_offpeak_cost')|float + states('sensor.whole_house_last_mon_midpeak_cost')|float +
+                          states('sensor.whole_house_last_mon_onpeak_cost')|float) | round(2)}}
+      whole_house_last_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.whole_house_last_mon_total_cost')|float / states('sensor.whole_house_last_month_total')|float * 100) | round(2)}}
+      
+
+utility_meter:
+  whole_house_daily:
+    source: sensor.whole_house_mon_kwh
+    cycle: daily
+    offset:
+      minutes: 3
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  whole_house_hourly:
+    source: sensor.whole_house_kwh
+    cycle: hourly
+  whole_house_monthly:
+    source: sensor.whole_house_mon_kwh
+    cycle: monthly
+    offset:
+      minutes: 3
+      days: 2
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  whole_house_yearly:
+    source: sensor.whole_house_mon_kwh
+    cycle: yearly
+    offset:
+      minutes: 3
+      days: 90
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+############## Other Tenants ####################
+  upstairs_daily:
+    source: sensor.upstairs_mon_kwh
+    cycle: daily
+    offset:
+      minutes: 3
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  upstairs_hourly:
+    source: sensor.upstairs_kwh
+    cycle: hourly
+  upstairs_monthly:
+    source: sensor.upstairs_mon_kwh
+    cycle: monthly
+    offset:
+      minutes: 3
+      days: 2
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  upstairs_yearly:
+    source: sensor.upstairs_mon_kwh
+    cycle: yearly
+    offset:
+      minutes: 3
+      days: 90
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+############## Downstairs without heat ####################
+  downstairs_daily:
+    source: sensor.downstairs_mon_kwh
+    cycle: daily
+    offset:
+      minutes: 3
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  downstairs_hourly:
+    source: sensor.downstairs_kwh
+    cycle: hourly
+  downstairs_monthly:
+    source: sensor.downstairs_mon_kwh
+    cycle: monthly
+    offset:
+      minutes: 3
+      days: 2
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  downstairs_yearly:
+    source: sensor.downstairs_mon_kwh
+    cycle: yearly
+    offset:
+      minutes: 3
+      days: 90
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+############## Downstairs with heat ####################
+  down_heat_daily:
+    source: sensor.down_heat_mon_kwh
+    cycle: daily
+    offset:
+      minutes: 3
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  down_heat_hourly:
+    source: sensor.down_heat_kwh
+    cycle: hourly
+  down_heat_monthly:
+    source: sensor.down_heat_mon_kwh
+    cycle: monthly
+    offset:
+      minutes: 3
+      days: 2
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  down_heat_yearly:
+    source: sensor.down_heat_mon_kwh
+    cycle: yearly
+    offset:
+      minutes: 3
+      days: 90
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+############## Just our heat ####################
+  our_heat_daily:
+    source: sensor.our_heat_mon_kwh
+    cycle: daily
+    offset:
+      minutes: 3
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  our_heat_hourly:
+    source: sensor.our_heat_kwh
+    cycle: hourly
+  our_heat_monthly:
+    source: sensor.our_heat_mon_kwh
+    cycle: monthly
+    offset:
+      minutes: 3
+      days: 2
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+  our_heat_yearly:
+    source: sensor.our_heat_mon_kwh
+    cycle: yearly
+    offset:
+      minutes: 3
+      days: 90
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+
+
+ffmpeg:
+
+stream:
+
+camera:
+  - platform: generic
+    name: BabyCam
+    stream_source: !secret wyzecam_rtsp_stream
+    still_image_url: "null"
+    # username: [username]
+    # password: [password]
+    # authentication: digest
+
+################### Custom Booleans ##################
+input_boolean:
+  # Vacation mode - enabled when away for 24 hours, or by toggle switch
+  vacation_mode:
+    name: Vacation Mode
+  guest_mode:
+    name: Guest Mode
+  away_mode:
+    name: Away Mode
+  brown_noise:
+    name: Brown Noise
+  good_night:
+    name: Good Night
+  automation_tester:
+    name: Automation Tester
+  lights_out:
+    name: Lights Out
+
+binary_sensor:
+  - platform: ffmpeg_noise
+    input: !secret wyzecam_rtsp_stream
+    extra_arguments: -filter:a highpass=f=300,lowpass=f=2500,volume=volume=2 -codec:a libmp3lame -ar 16000
+    initial_state: false
+    duration: 2
+    reset: 3
+    peak: -32
+
+  - platform: workday
+    country: CA
+    province: 'ON'
+
+  - platform: uptimerobot
+    api_key: !secret uptime_robot_key
+
+  - platform: template
+    sensors:
+      humidity_above_max:
+        friendly_name: Humidity Above Max
+        value_template: "{{(states.sensor.mysa_humidity.state) | float >= (states.sensor.max_indoor_humidity.state) | float }}"
+      humidity_below_min:
+        friendly_name: Humidity Below Min
+        value_template: "{{(states.sensor.mysa_humidity.state) | float <= (states.sensor.min_indoor_humidity.state) | float }}"
+        
+
+    
+    
+    
+# Yeelight bulb initialization
+discovery:
+  ignore:
+    - yeelight
+yeelight:
+  devices:
+    192.168.86.81:
+      name: Bedroom
+      use_music_mode: true
+    192.168.86.110:
+      name: Bedroom_2
+      use_music_mode: true
+  custom_effects:
+   - name: 'Sunrise'
+     flow_params:
+       count: 1
+       action: stay
+       transitions:
+         - RGBTransition: [255, 77, 0, 20000, 1]
+         - RGBTransition: [255, 69, 0, 300000, 10]
+         - TemperatureTransition: [2200, 420000, 90]
+         - TemperatureTransition: [4200, 180000, 100]
+   - name: 'Quicksun'
+     flow_params:
+       count: 1
+       action: stay
+       transitions:
+         - TemperatureTransition: [2200, 20000, 20]
+         - TemperatureTransition: [4200, 100000, 100]
+
+# Lighting groups
+light:
+  - platform: group
+    name: Bedroom Lights
+    entities:
+      - light.bedroom
+      - light.bedroom_2
+  - platform: group
+    name: Bathroom Lights
+    entities:
+      - light.kasa_dimmer_switch_1
+
+    
+# Home Assistant Relay
+rest_command:
+  assistant_broadcast:
+    url: http://192.168.86.121:3000/assistant
+    method: POST
+    content_type: 'application/json'
+    payload: '{"command":"{{ command }}", "user":"Home Assistant 2", "broadcast":true}'
+    
+  assistant_converse:
+    url: http://192.168.86.121:3000/assistant
+    method: POST
+    content_type: 'application/json'
+    payload: '{"command":"{{ command }}", "user":"Home Assistant 2", "converse":true}'
+
+  assistant_relay:
+    url: http://192.168.86.121:3000/assistant
+    method: POST
+    content_type: 'application/json'
+    payload: '{"command":"{{ command }}", "user":"Home Assistant 2"}'
+    
+    
+counter:
+  song_counter:
+    initial: 0
+    step: 1
+  sump_pump_counter:
+    name: Sump Pump Daily Run Count
+    step: 1
+
+
+
+
+

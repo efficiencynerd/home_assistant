@@ -1,0 +1,141 @@
+######################### Baby Room Switch Automation #################################################
+- alias: Bedroom 2 Button 1 Press
+  id: '1618587322283'
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: baby_room_switch
+      event: 1000
+  action:
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: light.baby_room
+          state: "on"
+        sequence:
+        - service: light.turn_off
+          entity_id: light.baby_room
+      default:
+        - service: light.turn_on
+          entity_id: light.baby_room
+          data:
+            brightness: 255
+            transition: 1
+
+- alias: Bedroom 2 Button 2 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: baby_room_switch
+      event: 2002
+  action:
+        - service: light.turn_on
+          entity_id: light.baby_room
+          data:
+            brightness: 100
+            transition: 1
+  mode: single
+
+- alias: Bedroom 2 Button 2 Hold
+  trigger:
+    platform: event
+    event_type: deconz_event
+    event_data:
+      id: baby_room_switch
+      event: 2001
+  action:
+    - service: deconz.configure
+      data:
+        entity: light.baby_room
+        field: "/action"
+        data: {"bri_inc":254, "transitiontime":60}
+
+- alias: Bedroom 2 Button 3 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: baby_room_switch
+      event: 3002
+  action:
+    - service: light.turn_on
+      entity_id: light.baby_room
+      data:
+        brightness: 2
+        transition: 1
+  mode: single
+
+- alias: Bedroom 2 Button 3 Hold
+  trigger:
+    platform: event
+    event_type: deconz_event
+    event_data:
+      id: baby_room_switch
+      event: 3001
+  action:
+    - service: deconz.configure
+      data:
+        entity: light.baby_room
+        field: "/action"
+        data: {"bri_inc":-254, "transitiontime":60}
+
+- alias: Stop brightness change Bedroom 2 from dimmer
+  trigger:
+    - platform: event
+      event_type: deconz_event
+      event_data:
+        id: baby_room_switch
+        event: 2003
+    - platform: event
+      event_type: deconz_event
+      event_data:
+        id: baby_room_switch
+        event: 3003
+  action:
+    - service: deconz.configure
+      data:
+        entity: light.baby_room
+        field: "/action"
+        data: {"bri_inc":0}
+
+- alias: Bedroom 2 Button 4 Press
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: baby_room_switch
+      event: 4000
+  action:
+  - service: media_player.media_stop
+    entity_id: media_player.baby_room_speaker
+
+- alias: Bedroom 2 Button 4 Hold
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: baby_room_switch
+      event: 4001
+  action:
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.baby_room_speaker
+      volume_level: 0.00
+  - delay: 
+      seconds: 2
+  - service: media_player.play_media
+    data:
+      entity_id: media_player.baby_room_speaker
+      media_content_id: media-source://media_source/media/brown_noise.mp3
+      media_content_type: audio/mp3
+  - delay: 
+      seconds: 4
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.baby_room_speaker
+      volume_level: 0.40
+  mode: single
+
+

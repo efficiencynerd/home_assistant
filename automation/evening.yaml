@@ -1,0 +1,288 @@
+############### Evening Settings #######################################################################
+
+- alias: Dim All lights at sunset
+  trigger:
+    platform: sun
+    event: sunset
+  action:
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.kitchen
+              value_template: >
+                  {% if states.light.kitchen.state == "on"  %}
+                    {{ states.light.kitchen.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 150
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.kitchen
+                  transition: 120
+                  brightness: 150
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.bedroom_lights
+              value_template: >
+                  {% if states.light.bedroom_lights.state == "on"  %}
+                    {{ states.light.bedroom_lights.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 100
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.bedroom_lights
+                  transition: 120
+                  brightness: 75
+                  color_temp: 400
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.couch
+              value_template: >
+                  {% if states.light.couch.state == "on"  %}
+                    {{ states.light.couch.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 150
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.couch
+                  transition: 120
+                  brightness: 150
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.middle
+              value_template: >
+                  {% if states.light.middle.state == "on"  %}
+                    {{ states.light.middle.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 150
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.middle
+                  transition: 120
+                  brightness: 150
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.desk
+              value_template: >
+                  {% if states.light.desk.state == "on"  %}
+                    {{ states.light.desk.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 150
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.desk
+                  transition: 120
+                  brightness: 150
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.office
+              value_template: >
+                  {% if states.light.office.state == "on"  %}
+                    {{ states.light.office.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 150
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.office
+                  transition: 120
+                  brightness: 150
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.stairs
+              value_template: >
+                  {% if states.light.stairs.state == "on"  %}
+                    {{ states.light.stairs.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 150
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.stairs
+                  transition: 120
+                  brightness: 150
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.baby_room
+              value_template: >
+                  {% if states.light.baby_room.state == "on"  %}
+                    {{ states.light.baby_room.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 150
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.baby_room
+                  transition: 120
+                  brightness: 150
+     - service: light.turn_on
+       data:
+         entity_id: light.outside
+         transition: 120
+         brightness: 255
+
+- alias: Dim All lights at 9pm
+  trigger:
+    platform: time
+    at: "21:00:00"
+  action:
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.kitchen
+              value_template: >
+                  {% if states.light.kitchen.state == "on"  %}
+                    {{ states.light.kitchen.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 64
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.kitchen
+                  transition: 120
+                  brightness: 64
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.bedroom_lights
+              value_template: >
+                  {% if states.light.bedroom_lights.state == "on"  %}
+                    {{ states.light.bedroom_lights.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 25
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.bedroom_lights
+                  transition: 120
+                  brightness: 25
+                  color_temp: 500
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.couch
+              value_template: >
+                  {% if states.light.couch.state == "on"  %}
+                    {{ states.light.couch.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 64
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.couch
+                  transition: 120
+                  brightness: 64
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.middle
+              value_template: >
+                  {% if states.light.middle.state == "on"  %}
+                    {{ states.light.middle.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 64
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.middle
+                  transition: 120
+                  brightness: 64
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.desk
+              value_template: >
+                  {% if states.light.desk.state == "on"  %}
+                    {{ states.light.desk.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 64
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.desk
+                  transition: 120
+                  brightness: 64
+     - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: light.office
+              value_template: >
+                  {% if states.light.office.state == "on"  %}
+                    {{ states.light.office.attributes.brightness }}
+                  {% else %}
+                    0
+                  {% endif %}
+              above: 64
+          sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.office
+                  transition: 120
+                  brightness: 64
+
+- alias: Turn off outside lights
+  trigger:
+    - platform: time
+      at: "23:00:00"
+    - platform: sun
+      event: sunrise
+  action:
+    - choose:
+    # if we just got home, wait longer
+      - conditions:
+        - condition: state
+          entity_id: light.stairs
+          state: 'on'
+        - condition: not
+          conditions:
+          - condition: state
+            entity_id: light.stairs
+            state: 'on'
+            for: "00:30:00"
+        sequence:
+        - delay:
+            minutes: 10
+    # ELSE just go
+      default:
+
+    - service: light.turn_off
+      entity_id:
+        - light.outside
+        - light.stairs

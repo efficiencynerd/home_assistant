@@ -1,0 +1,132 @@
+######################## Presence Detection #####################
+############################################################################################################
+
+# When someone gets home at night, turn on some lights.
+- alias: Someone gets home
+  trigger:
+  - entity_id: person.emily_goodyear
+    event: enter
+    platform: zone
+    zone: zone.home
+  - entity_id: person.michael_bechard
+    event: enter
+    platform: zone
+    zone: zone.home
+  - platform: template
+    value_template: "{{ is_state('sensor.pixel_4a_wifi_connection', 'The Bechardian') }}"
+  - platform: template
+    value_template: "{{ is_state('sensor.moto_g_power_wifi_connection', 'The Bechardian') }}"
+  action:
+  - service: input_boolean.turn_off
+    data:
+      entity_id: input_boolean.away_mode
+
+
+- alias: Away Mode Turns On
+  trigger:
+  - platform: state
+    entity_id: input_boolean.away_mode
+    to: "on"
+  action:
+  - service: climate.set_hvac_mode
+    data:
+      entity_id: climate.mysa_cc8800
+      hvac_mode: "off"
+  - service: light.turn_off
+    entity_id: group.all_lights
+  - service: media_player.turn_off
+    entity_id:
+      - group.all_cast_devices
+      - media_player.living_room_tv_2
+
+
+- alias: Away Mode Turns Off
+  trigger:
+  - platform: state
+    entity_id: input_boolean.away_mode
+    to: "off"
+  action:
+  - service: input_boolean.turn_off
+    data:
+      entity_id: input_boolean.vacation_mode
+  - choose:
+    - conditions:
+      - condition: sun
+        after: sunset
+        before: sunrise
+      sequence:
+        - service: light.turn_on
+          data:
+            brightness: 255
+            entity_id:
+            - light.stairs
+            - light.outside
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: "{{ ( states('sensor.openweathermap_temperature')|float + 3  ) < ( states('sensor.mysa_current_temp')|float ) }}"
+      sequence:
+        - service: climate.set_hvac_mode
+          data:
+            entity_id: climate.mysa_cc8800
+            hvac_mode: "heat"
+
+# Turn off everything if everyone leaves. Need to add other person presence #############################
+# detection at some point to this.
+- alias: Going Away
+  trigger:
+    - platform: state
+      entity_id: group.everybody
+      to: "not_home"
+    - platform: template
+      value_template: "{{ not is_state('sensor.moto_g_power_wifi_connection', 'The Bechardian') }}"
+    - platform: template
+      value_template: "{{ not is_state('sensor.pixel_xl_wifi_connection', 'The Bechardian') }}"
+  condition:
+    - condition: template
+      value_template: "{{ not is_state('sensor.moto_g_power_wifi_connection', 'The Bechardian') }}"
+    - condition: template
+      value_template: "{{ not is_state('sensor.pixel_xl_wifi_connection', 'The Bechardian') }}"
+    - condition: state
+      entity_id: group.everybody
+      state: "not_home"
+  action:
+  - service: input_boolean.turn_on
+    data:
+      entity_id: input_boolean.away_mode
+
+####################### Vacation Mode ####################################################################
+- alias: Enable Vacation Mode
+  trigger: 
+    - platform: state
+      entity_id: group.everybody
+      to: "not_home"
+      for: "12:00:00"
+  action:
+    - service: input_boolean.turn_on
+      data:
+        entity_id: input_boolean.vacation_mode
+        
+- alias: Vacation Disable Automations ########################################################
+  trigger:
+    platform: state
+    entity_id: input_boolean.vacation_mode
+    to: "on"
+  action:
+  - service: automation.turn_off
+    entity_id:
+      - automation.morning_alarm
+      - automation.night_night
+      - automation.brown_noise
+
+- alias: Vacation Return Enable Automations ####################################################
+  trigger:
+    platform: state
+    entity_id: input_boolean.vacation_mode
+    to: "off"
+  action:
+  - service: automation.turn_on
+    entity_id:
+      - automation.morning_alarm
+      - automation.night_night
+      - automation.brown_noise

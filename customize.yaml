@@ -1,0 +1,4 @@
+sensor.mysa_current_temp:
+  unit_of_measurement: °C
+sensor.mysa_set_point:
+  unit_of_measurement: °C

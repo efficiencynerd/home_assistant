@@ -1,0 +1,97 @@
+####################### Morning Alarm Clock ############################################################
+
+# If it is a workday and vacation mode is not on, start morning routine.
+- alias: Morning Alarm
+  trigger:
+    platform: time
+    at: input_datetime.morning_alarm
+  action:
+  - choose:
+    # IF not workday, wait longer
+    - conditions:
+        - condition: state
+          entity_id: 'binary_sensor.workday_sensor'
+          state: 'off'
+      sequence:
+        - delay:
+            minutes: "{{ states('input_number.morning_alarm_delay') | int(0) }}"
+    # ELSE just go
+    default:
+  - repeat:
+      sequence:
+        - service: media_player.volume_set
+          data_template: 
+            entity_id: 'media_player.bedroom_speaker'
+            volume_level: >
+              {% if states.media_player.bedroom_speaker.attributes.volume_level %}
+                {% set volume = states.media_player.bedroom_speaker.attributes.volume_level %}
+                {% if volume - 0.01 < 0.0 %}
+                  0.0
+                {% else %}
+                  {{ volume - 0.01 }}
+                {% endif %}
+              {% else %}
+                0.01
+              {% endif %}
+        - delay:
+            milliseconds: 1500
+      until:
+        # Did it finish?
+        - condition: template
+          value_template: >
+            {% if states.media_player.bedroom_speaker.attributes.volume_level %}
+              {{ state_attr('media_player.bedroom_speaker', 'volume_level') < 0.01 }}
+            {% else %}
+              TRUE
+            {% endif %}
+  - service: light.turn_on
+    data:
+      entity_id: light.bedroom
+      effect: 'Sunrise'
+  - service: spotcast.start
+    data:
+      entity_id: media_player.bedroom_speaker
+      uri: spotify:playlist:7aQA51cj8PYpMAaPO7PDnT # Wake Up playlist
+    #   uri: spotify:playlist:1v4DXXDTSpDo4BO8zc27q6 # Em's Christmas
+      shuffle: true
+      random_song: true
+  - delay:
+      seconds: 1
+  - choose:
+    # if workday, volume should be louder
+    - conditions:
+        - condition: state
+          entity_id: 'binary_sensor.workday_sensor'
+          state: 'on'
+      sequence:
+        - service: media_player.volume_set
+          data:
+            entity_id: media_player.bedroom_speaker
+            volume_level: 0.25
+    # else set volume lower
+    default:
+        - service: media_player.volume_set
+          data:
+            entity_id: media_player.bedroom_speaker
+            volume_level: 0.20
+  - delay:
+      minutes: 13
+  - service: light.turn_on
+    data:
+      entity_id: light.bedroom_2
+      effect: 'Quicksun'
+  - delay: # Turn everything off after a while
+      minutes: 60
+  - wait_template: "{{ not is_state('media_player.bedroom_speaker', 'playing') }}"
+  - service: light.turn_on
+    data:
+      entity_id: light.bedroom_lights
+      color_temp: 317
+      brightness: 1
+  - service: light.turn_off
+    data:
+      entity_id: light.bedroom_lights
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.bedroom_speaker
+      volume_level: 0.20

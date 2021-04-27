@@ -1,0 +1,25 @@
+##################### Motion Detection When Away ###############################
+- alias: motion detection when away
+  trigger:
+  - platform: state
+    entity_id:
+      - binary_sensor.kitchen_sensor
+      - binary_sensor.living_room_sensor
+    to: 'on'
+  condition:
+    - condition: state
+      entity_id: input_boolean.away_mode
+      state: "on"
+  action:
+    - service: notify.michael_phone
+      data:
+        message: >
+              {% if states.binary_sensor.living_room_sensor.state == "on" %}
+                Motion Detected in Living Room
+              {% elif states.binary_sensor.living_room_sensor.state == "on" %}
+                Motion Detected in Kitchen
+              {% endif %}
+        title: "Motion Detected at Home!"
+        data:
+          clickAction: "app://com.hualai"
+          channel: Alarm

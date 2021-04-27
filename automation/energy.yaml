@@ -1,0 +1,196 @@
+##### Energy Automations ################333
+
+- alias: Change electricity rate
+  trigger:
+    - platform: time
+      at: "07:03:00"
+    - platform: time
+      at: "11:03:00"
+    - platform: time
+      at: "17:03:00"
+    - platform: time
+      at: "19:03:00"
+    - platform: homeassistant
+      event: start
+  action:
+    - choose:
+      ### When to switch to off peak
+      - conditions:
+        - condition: or
+          conditions:
+          - condition: time
+            after: "19:00:00"
+            before: "7:00:00"
+          - condition: state
+            entity_id: 'binary_sensor.workday_sensor'
+            state: 'off'
+        sequence:
+        - service: utility_meter.select_tariff
+          data:
+            tariff: 'offpeak'
+            entity_id: 
+                - utility_meter.whole_house_daily
+                - utility_meter.whole_house_monthly
+                - utility_meter.whole_house_yearly
+                - utility_meter.upstairs_daily
+                - utility_meter.upstairs_monthly
+                - utility_meter.upstairs_yearly
+                - utility_meter.downstairs_daily
+                - utility_meter.downstairs_monthly
+                - utility_meter.downstairs_yearly
+                - utility_meter.down_heat_daily
+                - utility_meter.down_heat_monthly
+                - utility_meter.down_heat_yearly
+                - utility_meter.our_heat_daily
+                - utility_meter.our_heat_monthly
+                - utility_meter.our_heat_yearly
+      - conditions:
+      ### When should switch to onpeak
+        - condition: or
+          conditions:
+          - condition: and
+            conditions:
+            - condition: time
+              after: "11:00:00"
+              before: "17:00:00"
+            - condition: template
+              value_template: >
+                {{ (5 <= now().month <= 10) }}
+          - condition: and
+            conditions:
+            - condition: or
+              conditions:
+              - condition: time
+                after: "7:00:00"
+                before: "11:00:00"
+              - condition: time
+                after: "17:00:00"
+                before: "19:00:00"
+            - condition: template
+              value_template: >
+                {{ (now().month < 5) or (now().month > 10) }}
+        sequence:
+        - service: utility_meter.select_tariff
+          data:
+            tariff: 'onpeak'
+            entity_id: 
+                - utility_meter.whole_house_daily
+                - utility_meter.whole_house_monthly
+                - utility_meter.whole_house_yearly
+                - utility_meter.upstairs_daily
+                - utility_meter.upstairs_monthly
+                - utility_meter.upstairs_yearly
+                - utility_meter.downstairs_daily
+                - utility_meter.downstairs_monthly
+                - utility_meter.downstairs_yearly
+                - utility_meter.down_heat_daily
+                - utility_meter.down_heat_monthly
+                - utility_meter.down_heat_yearly
+                - utility_meter.our_heat_daily
+                - utility_meter.our_heat_monthly
+                - utility_meter.our_heat_yearly
+      default:
+      ######## Should be mid peak ##################
+        - service: utility_meter.select_tariff
+          data:
+            entity_id: 
+                - utility_meter.whole_house_daily
+                - utility_meter.whole_house_monthly
+                - utility_meter.whole_house_yearly
+                - utility_meter.upstairs_daily
+                - utility_meter.upstairs_monthly
+                - utility_meter.upstairs_yearly
+                - utility_meter.downstairs_daily
+                - utility_meter.downstairs_monthly
+                - utility_meter.downstairs_yearly
+                - utility_meter.down_heat_daily
+                - utility_meter.down_heat_monthly
+                - utility_meter.down_heat_yearly
+                - utility_meter.our_heat_daily
+                - utility_meter.our_heat_monthly
+                - utility_meter.our_heat_yearly
+            tariff: midpeak
+
+
+################################# Notification for Dishwasher Done #########################
+
+###### If Sink Plugs are between 1150 and 1300 W for a duration of 5 minutes,
+###### consider the dishwasher to have "started" and trigger automation.
+###### Then, wait for Sink Plugs to go below 12 W, and send notification.
+
+- alias: Notify when Dishwasher Done
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.power_dryer_1_12_1min
+    above: '1150'
+    below: '1300'
+    for:
+      minutes: 5
+  action:
+  - wait_for_trigger:
+    - platform: numeric_state
+      entity_id: sensor.power_dryer_1_12_1min
+      below: '12'
+    continue_on_timeout: false
+    timeout:
+      hours: 2
+  - service: notify.michael_phone
+    data:
+      title: "The Dishwasher is Done!"
+      message: >
+          Dishwasher completed it's cycle at {{ now().strftime("%r") }}
+  - service: notify.living_room_tv
+    data:
+      title: "The Dishwasher is Done!"
+      message: >
+          Dishwasher completed it's cycle at {{ now().strftime("%r") }}
+  mode: single
+
+
+########################### Notify if Upstairs usage is high ######################
+
+- id: '1618242326618'
+  alias: High Upstairs Amperage
+  description: ''
+  trigger:
+  - platform: numeric_state
+    entity_id:
+      - sensor.power_upstairs_1_16_1s
+      - sensor.power_upstairs_2_15_1s
+    above: '7200'
+  action:
+  - service: notify.michael_phone
+    data:
+      title: "High Upstairs Usage"
+      message: >
+        Upstairs usage is {{ states('sensor.power_upstairs_1_16_1s') }} on channel 1 and {{ states('sensor.power_upstairs_2_15_1s') }} on channel 2
+  mode: single
+
+################################### Count Sump Pump Runs ######################
+
+- id: '1618246648996'
+  alias: Sump Pump Ran
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.power_living_room_14_1s
+    above: '500'
+    for:
+      seconds: 3
+  action:
+  - service: counter.increment
+    entity_id: counter.sump_pump_counter
+  mode: single
+
+- id: '1618412188996'
+  alias: Sump Pump Counter Reset
+  trigger:
+  - platform: time
+    at: "00:00:00"
+  action:
+  - service: counter.reset
+    entity_id: counter.sump_pump_counter
+  mode: single
+
+
+
+

@@ -1,0 +1,96 @@
+
+######################################## Lights Out ################################################
+
+- alias: Make It Dark
+  trigger:
+  - platform: state
+    entity_id: input_boolean.lights_out
+    to: "on"
+  action:
+  - service: input_boolean.turn_off
+    data:
+      entity_id: input_boolean.lights_out
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "on"
+      sequence:
+              - service: light.turn_off
+                entity_id:
+                - light.living_room
+                - light.kitchen
+                - light.bedroom_lights
+                - light.office
+                - light.bathroom_lights
+                - light.stairs
+    default:
+              - service: light.turn_off
+                entity_id:
+                - light.living_room
+                - light.kitchen
+                - light.office
+                - light.bedroom_lights
+                - light.baby_room
+                - light.bathroom_lights
+                - light.stairs
+  - service: media_player.turn_off
+    entity_id: media_player.living_room_tv_2
+
+
+############################# Raptors Game! #############################################
+- alias: Raptors Game Starting
+  trigger:
+    platform: state
+    entity_id: calendar.raptors
+    to: "on"
+  condition:
+    - condition: state
+      entity_id: input_boolean.away_mode
+      state: "off"
+  action:
+    - service: rest_command.assistant_broadcast
+      data_template:
+        command: >
+            The Raptors game against the {{ states.calendar.raptors.attributes.message
+            | regex_replace(" V ") | regex_replace(" At ") | regex_replace("🏀") | regex_replace("Raptors")}} is starting now!
+
+
+#################################### Steam Notifications #################################
+- alias: Casey Playing RL
+  trigger:
+    - platform: template
+      value_template: "{{ is_state_attr('sensor.steam_76561198040018713', 'game', 'Rocket League') }}"
+  action:
+    - service: notify.michael_phone
+      data:
+        title: "Casey is on Rocket League"
+        message: ""
+        data:
+          clickAction: "app://com.valvesoftware.android.steam.community"
+          actions:
+          - action: "URI"
+            title: "Open Steam"
+            uri: "app://com.valvesoftware.android.steam.community"
+    - delay: "02:00:00"
+
+- alias: SSD Is Getting Full
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.glances_data_used_percent
+      above: 95
+    - platform: numeric_state
+      entity_id: sensor.glances_data_used_percent
+      above: 90
+    - platform: numeric_state
+      entity_id: sensor.glances_data_used_percent
+      above: 80
+  action:
+    - service: notify.michael_phone
+      data:
+        title: "Home Assistant SSD is getting Full"
+        message: >
+            SSD currently at {{ states('sensor.glances_data_used_percent') }}% full with {{ states('sensor.glances_data_free') }} GB left.
+
+      
+      

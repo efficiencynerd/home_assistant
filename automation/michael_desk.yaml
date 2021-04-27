@@ -1,0 +1,29 @@
+############# Automations to turn Michael's desk peripherals on and off ############################
+
+- alias: Turn Michael Desk On
+  trigger:
+  - platform: state
+    entity_id: sensor.macbook_pro_displays
+    to: "2"
+  condition:
+  - condition: state
+    entity_id: device_tracker.macbook_pro
+    state: 'home'
+  action:
+  - service: switch.turn_on
+    entity_id: switch.smart_plug_2
+
+
+- alias: Turn Michael Desk Off
+  trigger:
+  - platform: state
+    entity_id: sensor.macbook_pro_displays
+    to: "1"
+    for: "00:02:00"
+  condition:
+  - condition: state
+    entity_id: device_tracker.macbook_pro
+    state: 'home'
+  action:
+  - service: switch.turn_off
+    entity_id: switch.smart_plug_2

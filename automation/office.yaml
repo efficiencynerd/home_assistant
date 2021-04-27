@@ -1,0 +1,39 @@
+######################### Office Switch Automation #################################################
+# - alias: Office Switch Automation
+#   trigger:
+#   - platform: state
+#     entity_id: sensor.office_switch
+#   action:
+#     - choose:
+#       - conditions:
+#         - condition: and
+#           conditions:
+#             - condition: state
+#               entity_id: sensor.office_switch
+#               state:
+#                 - 2_click_up
+#                 - 2_click
+#             - condition: state
+#               entity_id: light.office_lights
+#               state: 'off'
+#         sequence:
+#           - service: light.turn_on
+#             data:
+#               entity_id: light.office_lights
+#               brightness: 75
+#       - conditions:
+#         - condition: and
+#           conditions:
+#             - condition: state
+#               entity_id: sensor.office_switch
+#               state:
+#                 - 3_click_up
+#                 - 3_click
+#             - condition: state
+#               entity_id: light.office_lights
+#               state: 'off'
+#         sequence:
+#           - service: light.turn_on
+#             data:
+#               entity_id: light.office_light_1
+#               brightness: 1

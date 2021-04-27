@@ -1,0 +1,143 @@
+######################### Stairs Switch Automation #################################################
+
+- alias: Stairs Button 1 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: stairs_switch
+      event: 1002
+  action:
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: light.stairs
+          state: "on"
+        sequence:
+        - service: light.turn_on
+          entity_id: light.stairs
+          data:
+            brightness: 150
+            transition: 0
+        - service: light.turn_off
+          entity_id: light.stairs
+          data:
+            transition: 20
+      default:
+        - service: light.turn_on
+          entity_id: light.stairs
+          data:
+            brightness: 255
+
+
+- alias: Stairs Button 2 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: stairs_switch
+      event: 2002
+  action:
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: light.outside
+          state: "on"
+        sequence:
+        - service: light.turn_off
+          entity_id: light.outside
+      default:
+        - service: light.turn_on
+          entity_id: light.outside
+          data:
+            brightness: 255
+
+
+- alias: Stairs Button 3 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: stairs_switch
+      event: 3002
+  action:
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: light.living_room
+          state: "on"
+        sequence:
+        - service: light.turn_off
+          entity_id: light.living_room
+      default:
+      - service: automation.trigger # Do it this way so that brightness is where it should be
+        entity_id: automation.living_room_motion
+
+
+- alias: Stairs Button 4 Press Release
+  trigger:
+  - platform: event
+    event_type: deconz_event
+    event_data:
+      id: stairs_switch
+      event: 4002
+  action:
+        - choose:
+          - conditions:
+            - condition: state
+              entity_id: input_boolean.guest_mode
+              state: "on"
+            sequence:
+            - service: light.turn_off
+              entity_id:
+              - light.bedroom
+              - light.living_room
+              - light.kitchen
+              - light.office
+              - light.bathroom
+          default:
+          - service: light.turn_off
+            entity_id:
+            - light.bedroom
+            - light.living_room
+            - light.kitchen
+            - light.office
+            - light.baby_room
+            - light.bathroom
+        - service: media_player.turn_off
+          data:
+              entity_id:
+              - group.all_cast_devices
+              - media_player.living_room_tv_2
+        - delay:
+            minutes: 4
+        - service: input_boolean.turn_on
+          data:
+            entity_id: input_boolean.away_mode
+        - choose:
+          - conditions:
+            - condition: state
+              entity_id: input_boolean.guest_mode
+              state: "on"
+            sequence:
+            - service: light.turn_off
+              entity_id:
+              - light.stairs
+              - light.bedroom
+              - light.living_room
+              - light.kitchen
+              - light.office
+              - light.bathroom
+          default:
+          - service: light.turn_off
+            entity_id:
+            - light.stairs
+            - light.bedroom
+            - light.living_room
+            - light.kitchen
+            - light.office
+            - light.baby_room
+            - light.bathroom
+
+
+
