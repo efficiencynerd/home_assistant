@@ -1,0 +1,42 @@
+# Configure a default setup of Home Assistant (frontend, api, etc)
+default_config:
+
+utility_meter:
+  whole_house_daily:
+    source: sensor.power_bechardian_123_1mon
+    cycle: daily
+    offset:
+      minutes: 3
+    tariffs:
+      - onpeak
+      - midpeak
+      - offpeak
+      
+sensor:
+  - platform: template
+    sensors:
+      whole_house_day_offpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_daily_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      whole_house_day_midpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_daily_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      whole_house_day_onpeak_cost:
+        unit_of_measurement: '$'
+        value_template: "{{ (states('sensor.whole_house_daily_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0) | round(4) }}"
+      whole_house_day_total_cost:
+        unit_of_measurement: '$'
+        value_template: >
+                       {{ ((states('sensor.whole_house_daily_offpeak')|float * states('input_number.off_peak_kwh_cost')|float / 100.0) +
+                           (states('sensor.whole_house_daily_midpeak')|float * states('input_number.mid_peak_kwh_cost')|float / 100.0) +
+                           (states('sensor.whole_house_daily_onpeak')|float * states('input_number.on_peak_kwh_cost')|float / 100.0)) | round(4)}}
+      whole_house_day_avg_kwh_cost:
+        unit_of_measurement: '¢/kWh'
+        value_template: >
+                       {{ (states('sensor.whole_house_day_total_cost')|float / states('sensor.whole_house_daily_total')|float * 100) | round(2)}}
+                       
+      whole_house_daily_total:
+        unit_of_measurement: kWh
+        value_template: >
+          {{ (states('sensor.whole_house_daily_offpeak')|float + states('sensor.whole_house_daily_onpeak')|float + 
+          states('sensor.whole_house_daily_midpeak')|float) | round(3) }}     
